@@ -1,0 +1,6 @@
+customtkinter
+selenium
+beautifulsoup4
+lxml
+requests
+webdriver-manager

@@ -1,0 +1,14 @@
+부산광역시_교육/강좌 정보
+https://www.data.go.kr/data/15034069/openapi.do
+
+국가평생교육진흥원_K-MOOC_강좌정보
+https://www.data.go.kr/data/15042355/openapi.do
+
+한국관광공사_축제_행사정보
+https://www.data.go.kr/data/15101578/openapi.do
+
+LH_분양임대공고
+https://www.data.go.kr/data/15006451/openapi.do
+
+대한민국 공공서비스 정보
+https://www.data.go.kr/data/15109950/openapi.do
