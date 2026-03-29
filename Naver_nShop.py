@@ -129,14 +129,110 @@ class NaverNShopAnalyzer:
         lines.append(f"가격: {data['할인가']} (원가: {data['원가']} | 할인율: {data['할인율']})")
         lines.append(f"평점: {data['평점']} / 리뷰수: {data['리뷰수']}")
         
-        if data.get('리뷰'):
+        rank_revs = data.get('랭킹순리뷰', [])
+        low_revs = data.get('평점낮은순리뷰', [])
+        
+        if rank_revs:
+            lines.append(f"\n[랭킹순 리뷰 {len(rank_revs)}건]")
+            for i, rev in enumerate(rank_revs, 1):
+                lines.append(f"{i}. {rev}")
+        elif data.get('리뷰'):
             lines.append(f"\n[주요 리뷰 {len(data['리뷰'])}건]")
             for i, rev in enumerate(data['리뷰'], 1):
                 lines.append(f"{i}. {rev}")
+                
+        if low_revs:
+            lines.append(f"\n[평점 낮은순 리뷰 {len(low_revs)}건]")
+            for i, rev in enumerate(low_revs, 1):
+                lines.append(f"{i}. {rev}")
+        else:
+            lines.append(f"\n[평점 낮은순 리뷰] 해당 상품에 평점 낮은순 리뷰가 없거나 수집되지 않았습니다.")
         
         lines.append(f"\n분석 일시: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append(f"URL: {url}")
         return "\n".join(lines)
+
+    def get_review_texts_heuristically(self, driver, limit=10):
+        from selenium.webdriver.common.by import By
+        all_uls = driver.find_elements(By.TAG_NAME, "ul")
+        best_ul = None
+        max_score = 0
+        for u in all_uls:
+            try:
+                if not u.is_displayed(): continue
+                lis = u.find_elements(By.XPATH, "./li")
+                if len(lis) >= 2:
+                    text_len = sum(len(li.text) for li in lis[:5])
+                    score = len(lis) * text_len
+                    if score > max_score:
+                        max_score = score
+                        best_ul = u
+            except:
+                continue
+                
+        results = []
+        if best_ul:
+            lis = best_ul.find_elements(By.XPATH, "./li")
+            for li in lis[:limit]:
+                try:
+                    text = li.text.strip().replace('\n', ' ')
+                    if text and len(text) > 10: 
+                        results.append(text)
+                except:
+                    pass
+        return results
+
+    def fetch_dynamic_reviews(self, driver):
+        ranking_reviews = []
+        low_rating_reviews = []
+        try:
+            from selenium.webdriver.common.by import By
+            import time
+
+            driver.execute_script("window.scrollTo(0, 1500);")
+            time.sleep(1)
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
+            time.sleep(1)
+            
+            review_tabs = driver.find_elements(By.CSS_SELECTOR, 'a[href="#REVIEW"]')
+            if review_tabs:
+                driver.execute_script("arguments[0].click();", review_tabs[0])
+                time.sleep(2)
+            
+            ranking_reviews = self.get_review_texts_heuristically(driver, limit=10)
+            
+            xpath_query = "//*[contains(translate(text(), ' ', ''), '평점낮은순')]"
+            low_rating_btns = driver.find_elements(By.XPATH, xpath_query)
+            
+            if low_rating_btns:
+                target_btn = low_rating_btns[-1] 
+                for btn in low_rating_btns:
+                    try:
+                        if btn.tag_name in ['a', 'button', 'li']:
+                            target_btn = btn
+                            break
+                    except:
+                        pass
+                        
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", target_btn)
+                time.sleep(1)
+                try:
+                    target_btn.click()
+                except:
+                    driver.execute_script("arguments[0].click();", target_btn)
+                
+                time.sleep(3) 
+
+                new_low_reviews = self.get_review_texts_heuristically(driver, limit=20)
+                
+                for rev in new_low_reviews:
+                    if rev not in ranking_reviews:
+                        low_rating_reviews.append(rev)
+                        
+        except Exception as e:
+            print(f"Error fetching extended reviews: {e}")
+            
+        return ranking_reviews, low_rating_reviews
 
     def analyze_keyword(self, keyword, url, keep_open=False, base_output_dir=None, platform_dir_name="네이버"):
         """
@@ -161,6 +257,11 @@ class NaverNShopAnalyzer:
 
             html_source = driver.page_source
             data = self.parse_product_html(html_source)
+            
+            # 새롭게 추가된 동적 리뷰 수집
+            rank_revs, low_revs = self.fetch_dynamic_reviews(driver)
+            data["랭킹순리뷰"] = rank_revs
+            data["평점낮은순리뷰"] = low_revs
             
             output_content = self.format_results(data, url)
             self.save_to_txt(keyword, output_content, base_output_dir, platform_dir_name)
