@@ -1,42 +1,31 @@
-# ===== Python =====
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Python cache & compiled files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 
-# ===== 가상환경 =====
-.venv/
-venv/
-ENV/
-env/
-
-# ===== 빌드 및 배포 =====
+# Build and packaging directories
 build/
 dist/
-obf/
 *.spec
-*.exe
-*.zip
+*.egg-info/
+.eggs/
 
-# ===== IDE / 에디터 =====
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# ===== 로그 및 크래시 리포트 =====
+# Crash reports and logs
 nuitka-crash-report.xml
 pyarmor.bug.log
+*.log
 
-# ===== HTML 테스트 파일 (용량 큼) =====
-marit_test_page.html
-marit_test_page_scrolled.html
+# IDEs
+.idea/
+.vscode/
 
-# ===== zip 파일 =====
+# Ignore test pages and large compressed items if any
 *.zip
-
-# ===== API Key 설정 (보안) =====
-api_settings.txt
+*_test_page*.html
