@@ -152,6 +152,69 @@ class NaverNShopAnalyzer:
         lines.append(f"URL: {url}")
         return "\n".join(lines)
 
+    def expand_and_fetch_detail_images(self, driver):
+        detail_images = []
+        try:
+            from selenium.webdriver.common.by import By
+            import time
+
+            # 1. 상세정보 펼쳐보기 버튼 서치 및 클릭
+            xpath_query = "//*[contains(translate(text(), ' ', ''), '상세정보펼쳐보기') or contains(translate(text(), ' ', ''), '상세설명펼쳐보기')]"
+            expand_btns = driver.find_elements(By.XPATH, xpath_query)
+            
+            if expand_btns:
+                target_btn = None
+                for btn in expand_btns:
+                    if btn.tag_name in ['a', 'button', 'span', 'div'] and btn.is_displayed():
+                        target_btn = btn
+                        break
+                if not target_btn: target_btn = expand_btns[0]
+                
+                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", target_btn)
+                time.sleep(1)
+                try:
+                    target_btn.click()
+                except:
+                    driver.execute_script("arguments[0].click();", target_btn)
+                time.sleep(2)
+            
+            # 2. 본문 천천히 스크롤 (지연 로딩 이미지 활성화 유도)
+            # 상세설명이 꽤 긴 경우가 많으므로 화면을 15번 정도 끊어서 내려줌
+            for i in range(15):
+                driver.execute_script("window.scrollBy(0, 1000);")
+                time.sleep(0.4)
+                
+            # 3. 상세 이미지 태그 크롤링
+            selectors = [
+                ".se-main-container img",
+                "div[class*='detail'] img",
+                "div.view_area img"
+            ]
+            
+            imgs = []
+            for sel in selectors:
+                found = driver.find_elements(By.CSS_SELECTOR, sel)
+                if found:
+                    imgs.extend(found)
+                    
+            if not imgs:
+                imgs = driver.find_elements(By.CSS_SELECTOR, "img")
+                
+            for img in imgs:
+                src = img.get_attribute("src") or img.get_attribute("data-src")
+                if src and "http" in src:
+                    if "favicon" in src or "gif" in src or "icon" in src or "svg" in src or "base64" in src:
+                        continue
+                    
+                    base_src = src.split('?')[0] + "?type=m1000_pd"
+                    if base_src not in detail_images:
+                        detail_images.append(base_src)
+                        
+        except Exception as e:
+            print(f"Error fetching detail images: {e}")
+            
+        return detail_images
+
     def get_review_texts_heuristically(self, driver, limit=10):
         from selenium.webdriver.common.by import By
         all_uls = driver.find_elements(By.TAG_NAME, "ul")
@@ -250,13 +313,19 @@ class NaverNShopAnalyzer:
             target_url = self.filter_url(url)
             driver.get(target_url)
             time.sleep(4) 
-
-            # 스크롤 최하단까지 이동하여 모든 요소를 로드 (필요시)
-            # self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            # time.sleep(2)
+            
+            # 본문 지연 로딩 이미지 수집 및 상세 스크롤
+            detail_imgs = self.expand_and_fetch_detail_images(driver)
 
             html_source = driver.page_source
             data = self.parse_product_html(html_source)
+            
+            # 썸네일과 본문 지연 로딩 이미지 합치기 (중복 방지)
+            if '이미지리스트' not in data:
+                data['이미지리스트'] = []
+            for d_img in detail_imgs:
+                if d_img not in data['이미지리스트']:
+                    data['이미지리스트'].append(d_img)
             
             # 새롭게 추가된 동적 리뷰 수집
             rank_revs, low_revs = self.fetch_dynamic_reviews(driver)
