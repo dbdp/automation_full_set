@@ -245,6 +245,43 @@ class NaverNShopAnalyzer:
                     pass
         return results
 
+    def fetch_reviews_for_pages(self, driver, max_pages=5):
+        all_reviews = []
+        try:
+            from selenium.webdriver.common.by import By
+            import time
+            for page in range(1, max_pages + 1):
+                page_reviews = self.get_review_texts_heuristically(driver, limit=20)
+                for rev in page_reviews:
+                    if rev not in all_reviews:
+                        all_reviews.append(rev)
+                
+                if page < max_pages:
+                    next_page_num = str(page + 1)
+                    pg_btns = driver.find_elements(By.XPATH, f"//a[normalize-space(text())='{next_page_num}' and @role='menuitem']")
+                    if not pg_btns:
+                        pg_btns = driver.find_elements(By.XPATH, f"//a[normalize-space(text())='{next_page_num}']")
+                    
+                    found_btn = None
+                    for btn in pg_btns:
+                        if btn.is_displayed():
+                            found_btn = btn
+                            break
+                    
+                    if found_btn:
+                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", found_btn)
+                        time.sleep(1)
+                        try:
+                            found_btn.click()
+                        except:
+                            driver.execute_script("arguments[0].click();", found_btn)
+                        time.sleep(2)
+                    else:
+                        break
+        except Exception as e:
+            print(f"Pagination error: {e}")
+        return all_reviews
+
     def fetch_dynamic_reviews(self, driver):
         ranking_reviews = []
         low_rating_reviews = []
@@ -262,7 +299,7 @@ class NaverNShopAnalyzer:
                 driver.execute_script("arguments[0].click();", review_tabs[0])
                 time.sleep(2)
             
-            ranking_reviews = self.get_review_texts_heuristically(driver, limit=10)
+            ranking_reviews = self.fetch_reviews_for_pages(driver, max_pages=5)
             
             xpath_query = "//*[contains(translate(text(), ' ', ''), '평점낮은순')]"
             low_rating_btns = driver.find_elements(By.XPATH, xpath_query)
@@ -286,7 +323,7 @@ class NaverNShopAnalyzer:
                 
                 time.sleep(3) 
 
-                new_low_reviews = self.get_review_texts_heuristically(driver, limit=20)
+                new_low_reviews = self.fetch_reviews_for_pages(driver, max_pages=5)
                 
                 for rev in new_low_reviews:
                     if rev not in ranking_reviews:
